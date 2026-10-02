@@ -1,0 +1,13 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+backend/static
+backend/uvicorn.log
+backend/smoke_test.py
+backend/tests
+records/
+.opencode/
+*.docx
+*.md
+sample_statement.csv
