@@ -10,7 +10,7 @@ with CSV and PDF export.
 |---|---|
 | Frontend | React 19 + Vite + TypeScript, Tailwind CSS, Recharts, React Router, TanStack Query |
 | Backend | FastAPI (Python 3.12/3.14), SQLAlchemy 2.0, Alembic |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL (Docker locally · Neon managed in production) |
 | Auth | JWT (access + refresh) in `httpOnly` cookies, bcrypt password hashing |
 | Classification | Deterministic rule-based keyword matching + custom categories + manual override |
 | Export | CSV (backend) + ReportLab PDF report (backend) |
@@ -91,19 +91,48 @@ Interactive Swagger UI is available at **`/docs`**. Key resources:
 - `POST /api/uploads`, `GET /api/uploads`, `GET /api/uploads/{id}`
 - `GET /api/transactions` (paginated + filters), `PATCH /api/transactions/{id}`
 - `GET/POST /api/categories`, `PATCH/DELETE /api/categories/{id}`
-- `GET /api/summary`, `GET /api/export/csv`, `GET /api/export/pdf`
+- `GET /api/summary`, `GET /api/insights`
+- `GET /api/budgets`, `PUT/DELETE /api/budgets/{category_id}`
+- `GET /api/export/csv`, `GET /api/export/pdf`
 
 All routes require auth and are scoped to the logged-in user (per-account data
 isolation).
 
-## Deploying to Render
+## Deployment (Render + Neon)
+
+The app ships as **one Docker service** (API + built React app) and connects to a
+managed Postgres (Neon, already wired). Render builds the image and the container
+runs `alembic upgrade head` before serving.
+
+### Option A — Blueprint (one click)
 
 1. Push this repo to GitHub.
-2. Create a **Web Service** on Render, set the root to this repo and
-   build from the `Dockerfile`.
-3. Add a managed **PostgreSQL** instance; Render injects `DATABASE_URL`
-   (the app auto-normalizes `postgres://` → the pg8000 scheme).
-4. Set `JWT_SECRET` to a long random string and `COOKIE_SECURE=true`.
+2. Render → **New → Blueprint** → select the repo (`render.yaml` defines the service).
+3. When prompted for the two secret env vars, paste:
+   - `DATABASE_URL` — your Neon connection string (same as `backend/.env`)
+   - `JWT_SECRET` — the same secret from `backend/.env`
+4. **Apply** — Render builds and deploys. `COOKIE_SECURE=true` is preset.
+
+### Option B — Manual
+
+1. Render → **New → Web Service** → select the repo → **Runtime: Docker** (root `Dockerfile`).
+2. **Health check path:** `/api/health`.
+3. **Environment:**
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | your Neon connection string |
+   | `JWT_SECRET` | a long random string |
+   | `COOKIE_SECURE` | `true` |
+
+4. Deploy. On boot the container migrates, then serves the API + SPA on one URL.
+
+**Notes**
+
+- The container binds to **`$PORT`** (Render) and falls back to `8000` locally.
+- Neon sits in `ap-southeast-1` → choose the **Singapore** region to minimize latency.
+- Free instances **spin down when idle** (slow first request).
+- Secrets are **never committed** — `.env` is git-ignored; only `.env.example` ships.
 
 ## More details
 

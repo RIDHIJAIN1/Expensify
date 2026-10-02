@@ -25,4 +25,5 @@ COPY backend/alembic.ini ./
 COPY --from=frontend /app/frontend/dist ./static
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Bind to $PORT when the platform provides one (Render/Cloud Run), else 8000.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
