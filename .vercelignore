@@ -1,0 +1,17 @@
+.venv/
+backend/.venv/
+backend/.env
+.env
+**/__pycache__/
+*.pyc
+.pytest_cache/
+Dockerfile
+docker-compose.yml
+render.yaml
+records/
+scripts/
+loadtests/results/
+loadtests/fixtures/
+*.log
+*.docx
+grill-me.md

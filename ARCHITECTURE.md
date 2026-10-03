@@ -36,8 +36,9 @@ flowchart TB
 
   DB[("Managed PostgreSQL 16<br/>users · categories · uploads<br/>transactions · budgets")]
 
+  SPA -- "page load: HTML, JS, CSS" --> STATIC
   SPA -- "HTTPS · JSON · httpOnly cookie (SameSite=Lax)" --> API
-  API --- STATIC
+  STATIC --- API
   API -- "SQLAlchemy ORM + Alembic migrations" --> DB
 ```
 

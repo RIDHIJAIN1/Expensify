@@ -140,9 +140,11 @@ def test_upload_validation(api):
     assert api.post("/api/uploads", files={"file": ("evil.txt", b"x,y,z", "text/plain")}).status_code == 400
     assert api.post("/api/uploads", files={"file": ("empty.csv", b"", "text/csv")}).status_code == 400
     assert api.post("/api/uploads", files={"file": ("bin.csv", b"Date,Description\n\x00\x01\x02", "text/csv")}).status_code == 400
+    # Oversized bodies may be rejected by the platform (413) before the app can
+    # apply its own MAX_UPLOAD_MB check and return 400 — accept both.
     assert api.post(
         "/api/uploads", files={"file": ("x.csv", b"D" * (10 * 1024 * 1024 + 1), "text/csv")}
-    ).status_code == 400
+    ).status_code in (400, 413)
     assert api.get("/api/uploads/99999999").status_code == 404
 
 

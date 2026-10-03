@@ -28,3 +28,6 @@ scripts/e2e_report.json
 Thumbs.db
 .idea/
 .vscode/
+
+.vercel
+.env*
