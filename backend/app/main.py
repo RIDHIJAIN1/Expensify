@@ -1,14 +1,21 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import auth, budgets, categories, export, insights, summary, transactions, uploads
 from app.config import settings
+from app.schemas.common import HealthOut
+from app.services.errors import ServiceError
 
 app = FastAPI(title="Expense Classification API", version="1.0.0")
+
+
+@app.exception_handler(ServiceError)
+async def service_error_handler(request: Request, exc: ServiceError):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,9 +35,9 @@ app.include_router(insights.router)
 app.include_router(export.router)
 
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthOut)
 def health():
-    return {"status": "ok"}
+    return HealthOut(status="ok")
 
 
 # Serve the built React SPA in production (when static/ exists)

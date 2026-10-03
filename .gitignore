@@ -19,6 +19,9 @@ dist-ssr/
 # Generated / build artifacts
 backend/static/
 *.log
+loadtests/fixtures/
+loadtests/results/
+scripts/e2e_report.json
 
 # OS / editor
 .DS_Store

@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class BudgetSet(BaseModel):
-    amount: Decimal = Field(gt=0)
+    # Bounds match the numeric(12, 2) DB column exactly.
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
 
 
 class BudgetOut(BaseModel):

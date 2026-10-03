@@ -100,7 +100,8 @@ def learned_keyword(description: str) -> str | None:
     Uses up to the first three words so "Indian Oil Petrol" becomes a single
     learnable phrase rather than a too-generic first word.
     """
-    text = " ".join((description or "").lower().split())
+    # Commas are the storage separator for keywords, so never emit one.
+    text = " ".join((description or "").lower().replace(",", " ").split())
     if not text:
         return None
     keyword = " ".join(text.split(" ")[:3]).strip(" -_.,")

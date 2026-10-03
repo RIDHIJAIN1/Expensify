@@ -1,7 +1,9 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_connect_args, get_database_url
 
@@ -26,9 +28,23 @@ class Base(DeclarativeBase):
     pass
 
 
+@contextmanager
+def transaction(db: Session) -> Iterator[Session]:
+    """Unit of work: commit on success, rollback on any failure."""
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

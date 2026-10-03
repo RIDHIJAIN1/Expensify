@@ -1,9 +1,17 @@
 import csv
 import io
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from datetime import datetime, date
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 REQUIRED_HEADERS = ["Date", "Description", "Amount", "Type", "Reference"]
+
+# Must match the DB columns exactly so nothing oversized reaches Postgres.
+DESCRIPTION_MAX = 500
+REFERENCE_MAX = 200
+AMOUNT_MAX = Decimal("9999999999.99")  # numeric(12, 2)
+AMOUNT_QUANTUM = Decimal("0.01")
+EARLIEST_DATE = date(1900, 1, 1)
+LATEST_DATE = date(2100, 12, 31)
 
 _DATE_FORMATS = [
     "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y",
@@ -15,32 +23,50 @@ class CSVError(Exception):
     """Fatal CSV problem (empty / unreadable / invalid header)."""
 
 
-def _parse_date(value: str):
-    value = (value or "").strip()
+def _parse_date(value: str) -> date:
+    raw = (value or "").strip()
     for fmt in _DATE_FORMATS:
         try:
-            return datetime.strptime(value, fmt).date()
+            parsed = datetime.strptime(raw, fmt).date()
+            if not (EARLIEST_DATE <= parsed <= LATEST_DATE):
+                break
+            return parsed
         except ValueError:
             continue
-    raise ValueError(f"invalid date: {value!r}")
+    raise ValueError(f"invalid date: {raw!r}")
 
 
 def _parse_amount(value: str) -> Decimal:
-    value = (value or "").strip()
-    value = (
-        value.replace("\u20b9", "")
+    raw = (value or "").strip()
+    cleaned = (
+        raw.replace("\u20b9", "")
         .replace("Rs", "").replace("rs", "").replace("RS", "")
         .replace(",", "").replace(" ", "")
     )
     negative = False
-    if value.startswith("(") and value.endswith(")"):
+    if cleaned.startswith("(") and cleaned.endswith(")"):
         negative = True
-        value = value[1:-1]
+        cleaned = cleaned[1:-1]
     try:
-        amount = Decimal(value)
+        amount = Decimal(cleaned)
     except InvalidOperation:
-        raise ValueError(f"invalid amount: {value!r}")
-    return -amount if negative else amount
+        raise ValueError(f"invalid amount: {raw!r}")
+    if not amount.is_finite():
+        raise ValueError(f"invalid amount: {raw!r}")
+    try:
+        amount = amount.quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise ValueError(f"amount out of range: {raw!r}")
+    if negative:
+        amount = -amount
+    if abs(amount) > AMOUNT_MAX:
+        raise ValueError(f"amount out of range: {raw!r}")
+    return amount
+
+
+def _sanitize_text(value: str, max_length: int) -> str:
+    """Collapse whitespace and cap length so the value always fits the column."""
+    return " ".join((value or "").split())[:max_length]
 
 
 def _normalize_type(value: str) -> str:
@@ -61,6 +87,30 @@ def decode_bytes(data: bytes) -> str:
         return data.decode("latin-1")
 
 
+def _validate_header(header: list[str]) -> None:
+    fields = [f.strip().lower() for f in header]
+    expected = [h.lower() for h in REQUIRED_HEADERS]
+    if fields != expected:
+        raise CSVError(f"invalid header. Expected {REQUIRED_HEADERS}, got {header}")
+
+
+def _parse_row(row: list[str]) -> dict:
+    txn_date = _parse_date(row[0])
+    description = _sanitize_text(row[1], DESCRIPTION_MAX)
+    if not description:
+        raise ValueError("missing description")
+    amount = _parse_amount(row[2])
+    ttype = _normalize_type(row[3])
+    reference = _sanitize_text(row[4], REFERENCE_MAX) or None
+    return {
+        "date": txn_date,
+        "description": description,
+        "amount": amount,
+        "type": ttype,
+        "reference": reference,
+    }
+
+
 def parse_csv(data: bytes) -> tuple[list[dict], list[str]]:
     """Parse CSV bytes.
 
@@ -78,10 +128,7 @@ def parse_csv(data: bytes) -> tuple[list[dict], list[str]]:
     header = next(reader, None)
     if header is None:
         raise CSVError("file is empty")
-    fields = [f.strip().lower() for f in header]
-    expected = [h.lower() for h in REQUIRED_HEADERS]
-    if fields != expected:
-        raise CSVError(f"invalid header. Expected {REQUIRED_HEADERS}, got {header}")
+    _validate_header(header)
 
     rows: list[dict] = []
     errors: list[str] = []
@@ -92,20 +139,7 @@ def parse_csv(data: bytes) -> tuple[list[dict], list[str]]:
             errors.append(f"row {i}: expected {len(REQUIRED_HEADERS)} columns, got {len(row)}")
             continue
         try:
-            date = _parse_date(row[0])
-            description = (row[1] or "").strip()
-            if not description:
-                raise ValueError("missing description")
-            amount = _parse_amount(row[2])
-            ttype = _normalize_type(row[3])
-            reference = (row[4] or "").strip() or None
-            rows.append({
-                "date": date,
-                "description": description,
-                "amount": amount,
-                "type": ttype,
-                "reference": reference,
-            })
+            rows.append(_parse_row(row))
         except Exception as e:
             errors.append(f"row {i}: {e}")
 

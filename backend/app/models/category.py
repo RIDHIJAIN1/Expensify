@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, utcnow
@@ -8,10 +16,15 @@ from app.database import Base, utcnow
 
 class Category(Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        # Per-user name uniqueness (also serves listing + "Other" lookups)
+        UniqueConstraint("user_id", "name", name="uq_category_user_name"),
+        CheckConstraint("btrim(name) <> ''", name="ck_categories_name_not_blank"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(60), nullable=False)
     keywords: Mapped[str] = mapped_column(Text, default="")  # comma-separated
